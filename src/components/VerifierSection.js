@@ -1,0 +1,368 @@
+import { InformationCircleIcon } from "@heroicons/react/outline";
+import React, { useEffect, useMemo } from "react";
+import { useState } from "react";
+import RadioButton from "./RadioButton";
+import checkmark from "../assets/images/checkmark.svg";
+import cancelmark from "../assets/images/cancelmark.svg";
+import { useSearchParams } from "react-router-dom";
+import { baseUrl, getWinnerPosition } from "../utils/utils";
+import { server_seed } from "../utils/ids";
+import sha256 from "sha256";
+import { useRef } from "react";
+import { useCallback } from "react";
+import { Tooltip } from "@mui/material";
+
+export default function VerifierSection() {
+  const [results, setResults] = useState([]);
+  const [selectedOptionverify, setSelectedOptionVerify] = useState("option1");
+  const [selectedOptioncalculate, setSelectedOptionCalculate] =
+    useState("1 with all details");
+  const [selectedOptionversion, setSelectedOptionVersion] = useState("v3");
+  // let { gameId } = useParams();
+  const [searchParams] = useSearchParams();
+
+  let gameId = searchParams.get("gameId");
+
+  const [serverSeedHashed, setServerSeedHashed] = useState("");
+  const [serverSeed, setServerSeed] = useState({
+    server_seed: "",
+    nonce: "",
+  });
+
+  const fetchServerSeedHashed = useCallback(async () => {
+    try {
+      const resp = await fetch(`${baseUrl}/serverSeedHashed/${gameId}`);
+      let serverSeedHashed = await resp.json();
+      console.log("serverSeedHashed", serverSeedHashed.is1v1);
+      setServerSeedHashed(serverSeedHashed);
+    } catch (error) {
+      console.log(error);
+    }
+  }, [gameId]);
+
+  useEffect(() => {
+    console.log("gameIdgameId", gameId);
+    if (!gameId) return;
+    fetchServerSeedHashed();
+  }, [fetchServerSeedHashed, gameId]);
+
+  const fetchServerSeed = useCallback(async () => {
+    try {
+      const resp = await fetch(`${baseUrl}/serverSeed/${gameId}`);
+      if (resp.status === 400) throw Error("Game not ended.");
+      let serverSeed = await resp.json();
+
+      setServerSeed(serverSeed);
+    } catch (error) {
+      console.log(error);
+    }
+  }, [gameId]);
+
+  const seedhash = useMemo(() => {
+    return sha256(serverSeed.server_seed);
+  }, [serverSeed]);
+
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const results = [];
+    let till = serverSeed.nonce;
+    if (selectedOptioncalculate !== "1 with all details") {
+      till = Math.max(0, serverSeed.nonce - 50);
+      setVisible(false);
+    } else {
+      setVisible(true);
+    }
+    for (let nonce = serverSeed.nonce; nonce >= till; nonce--) {
+      const hash = sha256(`${serverSeed.server_seed}${server_seed}${nonce}`);
+      results.push({
+        nonce,
+        winner: getWinnerPosition(hash, serverSeedHashed.is1v1),
+      });
+    }
+    setResults(results);
+  }, [serverSeed, selectedOptioncalculate, serverSeedHashed.is1v1]);
+
+  useEffect(() => {
+    if (!gameId) return;
+    fetchServerSeed();
+  }, [fetchServerSeed, gameId]);
+
+  const handleChange_verify = (event) => {
+    setSelectedOptionVerify(event.target.value);
+    console.log("selectedOptionverify", selectedOptionverify);
+  };
+
+  const handleChangeCalculate = (event) => {
+    setSelectedOptionCalculate(event.target.value);
+  };
+
+  const handleChangeVersion = (event) => {
+    setSelectedOptionVersion(event.target.value);
+  };
+
+  const moredetails = useRef();
+  const [isopen, setIsOpen] = useState(false);
+  const handMoreDetails = () => {
+    if (isopen) {
+      moredetails.current.style.display = "none";
+      setIsOpen(false);
+    } else {
+      moredetails.current.style.display = "block";
+      setIsOpen(true);
+    }
+  };
+  return (
+    <>
+      <div className="my-8 max-[599px]:h-[45vh] max-md:h-[40vh] md:h-[37vh] min-[900px]:h-[60vh] overflow-y-auto overflow-x-hidden">
+        <div className="text-2xl font-black tracking-wide text-gray">
+          Verifier
+        </div>
+        <div className="mt-4 text-sm font-black leading-6 tracking-wide text-gray">
+          What would you like to verify?
+        </div>
+        <div className="flex flex-wrap gap-4 mt-5 ">
+          <RadioButton
+            name="verify-list"
+            value={"Winner Takes All"}
+            onChange={handleChange_verify}
+          />
+          {/* <RadioButton
+            name="verify-list"
+            value={"Rock Paper Scissors"}
+            onChange={handleChange_verify}
+            disabled={true}
+          /> */}
+          <RadioButton
+            name="verify-list"
+            value={"Dogs vs Cheems"}
+            onChange={handleChange_verify}
+          />
+        </div>
+
+        <div className="mt-8">
+          <div className="flex flex-wrap mb-8 -mr-3">
+            <div className="w-full px-3 mb-6 md:w-full md:mb-0">
+              <label className="flex items-center gap-2 mb-4 text-sm font-black tracking-wide text-gray">
+                Server Seed (hashed)
+                <Tooltip
+                  title="A unique and randomly generated seed, generated by the server."
+                  placement="right"
+                >
+                  <InformationCircleIcon className="h-5 w-5 text-opacity-[0.56] text-nouveau-main font-black" />
+                </Tooltip>
+              </label>
+              <input
+                className="block w-full bg-transparent p-4 border-[1.5px] border-nouveau-main focus:outline-none border-opacity-20 text-xs tracking-wider font-bold text-opacity-80 placeholder:tracking-wider placeholder:font-semibold rounded-lg text-space-gray placeholder:text-space-gray"
+                type="text"
+                value={serverSeedHashed.server_seed_hash}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap mb-8 -mr-3">
+            <div className="w-full px-3 mb-6 md:w-full md:mb-0">
+              <label className="flex items-center gap-2 mb-4 text-sm font-black tracking-wide text-gray">
+                Server Seed (revealed)
+                <Tooltip
+                  title="This is only show when game is end"
+                  placement="right"
+                >
+                  <InformationCircleIcon className="h-5 w-5 text-opacity-[0.56] text-nouveau-main font-black" />
+                </Tooltip>
+              </label>
+              <input
+                className="block w-full bg-transparent p-4 border-[1.5px] border-nouveau-main focus:outline-none border-opacity-20 text-xs tracking-wider font-bold text-opacity-80 placeholder:tracking-wider placeholder:font-semibold rounded-lg text-space-gray placeholder:text-space-gray"
+                type="text"
+                onChange={(e) =>
+                  setServerSeed({ ...serverSeed, server_seed: e.target.value })
+                }
+                value={serverSeed.server_seed}
+              />
+            </div>
+          </div>
+          {serverSeed.server_seed && (
+            <div
+              className={`${
+                serverSeedHashed.server_seed_hash === seedhash
+                  ? "border-top-success"
+                  : "border-top-failed"
+              } border-opacity-[0.2] ml-3 rounded-tl-2xl rounded-bl-lg rounded-r-lg px-10 py-6 relative mb-8`}
+            >
+              {serverSeedHashed.server_seed_hash === seedhash ? (
+                <img
+                  src={checkmark}
+                  className="absolute left-[-5px] top-[-6px]"
+                  alt=""
+                />
+              ) : (
+                <img
+                  src={cancelmark}
+                  className="absolute left-[-5px] top-[-6px]"
+                  alt=""
+                />
+              )}
+
+              <div className="flex flex-wrap -mx-3">
+                <div className="w-full px-3 mb-6 md:w-full md:mb-0">
+                  <label className="flex items-center gap-2 mb-4 text-sm font-black tracking-wide text-gray">
+                    Verified server seed hash
+                    <Tooltip title='This is convert of Server Seed (revealed) with SHA-256 method' placement="right">
+                      <InformationCircleIcon className="h-5 w-5 text-opacity-[0.56] text-nouveau-main font-black" />
+                    </Tooltip>
+                  </label>
+                  <input
+                    className="block w-full bg-transparent p-4 border-[1.5px] border-nouveau-main focus:outline-none border-opacity-20 text-xs tracking-wider font-bold text-opacity-80 placeholder:tracking-wider placeholder:font-semibold rounded-lg text-space-gray placeholder:text-space-gray"
+                    type="text"
+                    value={seedhash}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex flex-wrap mb-8 -mr-3">
+            <div className="w-1/2 px-3 mb-6 md:mb-0">
+              <label className="flex items-center gap-2 mb-4 text-sm font-black tracking-wide text-gray">
+                Client Seed
+                <Tooltip
+                  title="This seed is chosen by the client (yourself) and can be modified at any time by accessing your Provably Fair Settings."
+                  placement="right"
+                >
+                  <InformationCircleIcon className="h-5 w-5 text-opacity-[0.56] text-nouveau-main font-black" />
+                </Tooltip>
+              </label>
+              <input
+                className="block w-full bg-transparent p-4 border-[1.5px] border-nouveau-main focus:outline-none border-opacity-20 text-xs tracking-wider font-bold text-opacity-80 placeholder:tracking-wider placeholder:font-semibold rounded-lg text-space-gray placeholder:text-space-gray"
+                type="text"
+                value={server_seed}
+              />
+            </div>
+            <div className="w-1/2 px-3 mb-6 md:mb-0">
+              <label className="flex items-center gap-2 mb-4 text-sm font-black tracking-wide text-gray">
+                Last/specific nonce
+                <Tooltip title="Winner of the last round game" placement="right">
+                  <InformationCircleIcon className="h-5 w-5 text-opacity-[0.56] text-nouveau-main font-black" />
+                </Tooltip>
+              </label>
+              <input
+                className="block w-full bg-transparent p-4 border-[1.5px] border-nouveau-main focus:outline-none border-opacity-20 text-xs tracking-wider font-bold text-opacity-80 placeholder:tracking-wider placeholder:font-semibold rounded-lg text-space-gray placeholder:text-space-gray"
+                type="text"
+                onChange={(e) =>
+                  setServerSeed({ ...serverSeed, nonce: e.target.value })
+                }
+                value={serverSeed.nonce}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap mb-8 -mr-3">
+            <div className="w-1/2 gap-4 mt-5 ">
+              <label className="items-center gap-2 mb-4 text-sm font-black tracking-wide text-gray">
+                Bets to Calculate
+              </label>
+              <div className="flex gap-3 mt-4">
+                <RadioButton
+                  name="calculate"
+                  value={"1 with all details"}
+                  checked={selectedOptioncalculate === "1 with all details"}
+                  onChange={handleChangeCalculate}
+                />
+                <RadioButton
+                  name="calculate"
+                  value={"50 without details"}
+                  checked={selectedOptioncalculate === "50 without details"}
+                  onChange={handleChangeCalculate}
+                />
+              </div>
+            </div>
+            <div className="w-1/2 gap-4 mt-5 ">
+              <label className="items-center gap-2 mb-4 text-sm font-black tracking-wide text-gray">
+                Version
+              </label>
+              <div className="flex gap-3 mt-4">
+                <RadioButton
+                  name="version"
+                  value={"v2"}
+                  checked={selectedOptionversion === "v2"}
+                  onChange={handleChangeVersion}
+                  selected
+                />
+                <RadioButton
+                  name="version"
+                  value={"v3"}
+                  checked={selectedOptionversion === "v3"}
+                  onChange={handleChangeVersion}
+                />
+              </div>
+            </div>
+          </div>
+          {serverSeed.nonce && (
+            <>
+              <label className="gap-2 mb-4 text-2xl font-black tracking-wide text-gray">
+                Bet Result
+              </label>
+              <div className="border-top-success ml-3 border-opacity-[0.2] rounded-tl-2xl rounded-bl-lg rounded-r-lg px-10 py-6 relative mb-[15px] mt-4">
+                <img
+                  src={checkmark}
+                  className="absolute left-[-5px] top-[-6px]"
+                  alt=""
+                />
+                <div className="flex flex-wrap -mx-3">
+                  <div className="w-full px-3 mb-6 md:w-full md:mb-0">
+                    {results.map(({ nonce, winner }) => (
+                      <>
+                        <div className="mb-4 text-sm font-semibold tracking-wide text-space-gray">
+                          Nonce #{nonce} Result:{" "}
+                          <span clrassName="text-gray">{winner}</span>
+                        </div>
+                      </>
+                    ))}
+                    <p className="mb-4 text-sm font-semibold tracking-wide text-space-gray">
+                      You may check if these results are the same. Remember:
+                      nonce is shared between games, so if you switched game you
+                      have to switch here too.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {visible && (
+          <button
+            className=" float-right bg-chat-tag bg-opacity-[0.09] rounded-lg font-bold text-sm text-chat-tag py-3 px-8"
+            onClick={handMoreDetails}
+          >
+            {!isopen ? 'More details' : 'Less details'}
+          </button>
+        )}
+        {visible && (
+          <div className="hidden mt-20" ref={moredetails}>
+            <div className="text-sm font-semibold tracking-wide text-space-gray">
+              To calculate the result, we will make a SHA-512 HMAC hash with
+              message clientseed,nonce and secret key serverseed:
+            </div>
+            <div className="px-3 mt-6 mb-6 md:mb-0">
+              {/* <label className="flex items-center gap-2 mb-4 text-sm font-black tracking-wide text-gray">
+                Client Seed
+              </label> */}
+              <input
+                className="block w-full bg-transparent p-4 border-[1.5px] border-nouveau-main focus:outline-none border-opacity-20 text-xs tracking-wider font-bold text-opacity-80 placeholder:tracking-wider placeholder:font-semibold rounded-lg text-space-gray placeholder:text-space-gray"
+                type="text"
+                value={
+                  "14366de68bb62e2c991237713f24e0b1145d531659c56e9e872ebcf4d24b7f248ffaee6f76720ea030439b14f4c294f09b318f8e398e26a4b737c2d30c882edf"
+                }
+              />
+            </div>
+            <div className="mt-6 text-sm font-semibold tracking-wide text-space-gray">
+              Take the first 5 characters (14366), convert it from a hexadecimal
+              to decimal (82790) and make sure it is between 0-999999.
+            </div>
+            <div className="mt-2 text-sm font-semibold tracking-wide text-space-gray">
+              Apply a modulo of 10,000 to that result and divide it by 100:
+              82790 % 10000 / 100 = 27.9 and this is your final bet result!{" "}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
